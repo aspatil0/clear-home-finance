@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { AdminLayout } from "@/components/layouts/AdminLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -9,20 +12,46 @@ import { Receipt, Mail, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function GenerateBills() {
+
   const [month, setMonth] = useState("february-2026");
   const [sendEmail, setSendEmail] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [latePayment, setLatePayment] = useState(false);
+  const [lateFeeRule, setLateFeeRule] = useState({
+    mode: "AUTO",
+    feeType: "Per Day %",
+    feeValue: 1.0,
+    graceDays: 0,
+    applyBase: "Outstanding",
+    autoRunHour: 0,
+    maxCap: "",
+    taxCode: "101",
+    compounding: false,
+    active: false,
+  });
+  const [latePaid, setLatePaid] = useState(false);
   const { toast } = useToast();
+
+  // Example calculation: 1% per day on outstanding (hardcoded for demo)
+  const outstanding = 4500 * 48; // ₹2,16,000
+  const lateFee = latePayment && lateFeeRule.active
+    ? Math.min(
+        ((lateFeeRule.feeValue / 100) * outstanding * Math.max(1, lateFeeRule.graceDays)),
+        lateFeeRule.maxCap ? Number(lateFeeRule.maxCap) : Number.POSITIVE_INFINITY
+      )
+    : 0;
+  const totalWithLateFee = outstanding + lateFee;
 
   const handleGenerate = async () => {
     setGenerating(true);
     await new Promise((r) => setTimeout(r, 2000));
     setGenerating(false);
     setGenerated(true);
+    if (latePayment && lateFeeRule.active) setLatePaid(true);
     toast({
       title: "Bills generated successfully",
-      description: `48 bills generated for February 2026. ${sendEmail ? "Email notifications sent." : ""}`,
+      description: `48 bills generated for February 2026. ${sendEmail ? "Email notifications sent." : ""}${latePayment && lateFeeRule.active ? " Late payment applied." : ""}`,
     });
   };
 
@@ -52,9 +81,18 @@ export default function GenerateBills() {
               <div className="text-sm text-muted-foreground space-y-1">
                 <div className="flex justify-between"><span>Total flats</span><span className="font-medium text-foreground">48</span></div>
                 <div className="flex justify-between"><span>Amount per flat</span><span className="font-medium text-foreground">₹4,500</span></div>
-                <div className="flex justify-between border-t pt-2 mt-2"><span className="font-medium text-foreground">Total billing</span><span className="font-semibold financial-amount">₹2,16,000</span></div>
+                {!latePayment || !lateFeeRule.active ? (
+                  <div className="flex justify-between border-t pt-2 mt-2"><span className="font-medium text-foreground">Total billing</span><span className="font-semibold financial-amount">₹2,16,000</span></div>
+                ) : (
+                  <>
+                    <div className="flex justify-between"><span>Late Fee</span><span className="font-medium text-foreground">₹{lateFee.toLocaleString()}</span></div>
+                    <div className="flex justify-between border-t pt-2 mt-2"><span className="font-medium text-foreground">Total with Late Fee</span><span className="font-semibold financial-amount">₹{totalWithLateFee.toLocaleString()}</span></div>
+                  </>
+                )}
+                {latePaid && <div className="text-xs text-warning">Marked as Late Paid</div>}
               </div>
             </div>
+
 
             <div className="flex items-center gap-2">
               <Checkbox id="sendEmail" checked={sendEmail} onCheckedChange={(v) => setSendEmail(!!v)} />
@@ -63,6 +101,76 @@ export default function GenerateBills() {
                 Send email notifications to all residents
               </label>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox id="latePayment" checked={latePayment} onCheckedChange={(v) => setLatePayment(!!v)} />
+              <label htmlFor="latePayment" className="text-sm text-muted-foreground cursor-pointer">
+                <Receipt className="inline h-3.5 w-3.5 mr-1" />
+                Apply Late Payment
+              </label>
+            </div>
+
+            {latePayment && (
+              <>
+                <Card className="mt-2">
+                  <CardHeader>
+                    <CardTitle>Late Fee Rule</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs mb-1">Mode</label>
+                        <Input value={lateFeeRule.mode} onChange={e => setLateFeeRule(r => ({ ...r, mode: e.target.value }))} disabled className="bg-muted" />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Fee Type</label>
+                        <Input value={lateFeeRule.feeType} onChange={e => setLateFeeRule(r => ({ ...r, feeType: e.target.value }))} disabled className="bg-muted" />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Fee Value</label>
+                        <Input type="number" value={lateFeeRule.feeValue} onChange={e => setLateFeeRule(r => ({ ...r, feeValue: parseFloat(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Grace Days</label>
+                        <Input type="number" value={lateFeeRule.graceDays} onChange={e => setLateFeeRule(r => ({ ...r, graceDays: parseInt(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Apply Base</label>
+                        <Input value={lateFeeRule.applyBase} onChange={e => setLateFeeRule(r => ({ ...r, applyBase: e.target.value }))} disabled className="bg-muted" />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Auto Run Hour UTC</label>
+                        <Input type="number" value={lateFeeRule.autoRunHour} onChange={e => setLateFeeRule(r => ({ ...r, autoRunHour: parseInt(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Max Cap %</label>
+                        <Input type="number" value={lateFeeRule.maxCap} onChange={e => setLateFeeRule(r => ({ ...r, maxCap: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Tax Code</label>
+                        <Input value={lateFeeRule.taxCode} onChange={e => setLateFeeRule(r => ({ ...r, taxCode: e.target.value }))} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={lateFeeRule.compounding} onCheckedChange={v => setLateFeeRule(r => ({ ...r, compounding: v }))} />
+                        <span className="text-xs">Compounding</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={lateFeeRule.active} onCheckedChange={v => setLateFeeRule(r => ({ ...r, active: v }))} />
+                        <span className="text-xs">Active</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                {(lateFeeRule.active) && (
+                  <div className="mt-4 p-4 rounded-lg border bg-muted/50">
+                    <div className="flex justify-between text-base font-medium">
+                      <span>Total with Late Fee</span>
+                      <span>₹{totalWithLateFee.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             <Button className="w-full" onClick={handleGenerate} disabled={generating}>
               {generating ? (

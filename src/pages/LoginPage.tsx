@@ -73,10 +73,10 @@ export default function LoginPage() {
         <div className="mt-6 bg-muted rounded-lg p-4">
           <p className="text-xs font-medium text-muted-foreground mb-2">Demo accounts:</p>
           <div className="space-y-1 text-xs text-muted-foreground">
+            <p><span className="font-medium text-foreground">SuperAdmin:</span> superadmin@societyhub.com</p>
             <p><span className="font-medium text-foreground">Admin:</span> admin@greenvalley.com</p>
             <p><span className="font-medium text-foreground">Treasurer:</span> treasurer@greenvalley.com</p>
             <p><span className="font-medium text-foreground">Resident:</span> resident@greenvalley.com</p>
-            <p><span className="font-medium text-foreground">SuperAdmin:</span> superadmin@societyhub.com</p>
             <p className="text-muted-foreground/60 mt-1">Any password works</p>
           </div>
         </div>

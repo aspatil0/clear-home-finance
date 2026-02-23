@@ -54,3 +54,63 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be inside AuthProvider");
   return ctx;
 }
+
+
+// import { createContext, useContext, useState, ReactNode } from "react";
+
+// type UserRole = "admin" | "treasurer" | "resident" | "superadmin";
+
+// interface AuthUser {
+//   id: string;
+//   name: string;
+//   email: string;
+//   role: UserRole;
+//   flatNumber?: string;
+//   societyName?: string;
+// }
+
+// interface AuthContextType {
+//   user: AuthUser | null;
+//   login: (email: string, password: string) => Promise<void>;
+//   logout: () => void;
+//   isLoading: boolean;
+// }
+
+// const AuthContext = createContext<AuthContextType | null>(null);
+
+// // Replace the login function with real API call when backend is ready
+// const login = async (email: string, password: string) => {
+//   setIsLoading(true);
+//   try {
+//     // Example using fetch (replace URL with your backend endpoint)
+//     const response = await fetch("https://your-backend-api.com/auth/login", {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email, password })
+//     });
+//     if (!response.ok) throw new Error("Invalid credentials");
+//     const data = await response.json();
+//     // Assume API returns user object and token
+//     setUser(data.user);
+//     // Optionally store token in localStorage/sessionStorage
+//     // localStorage.setItem('token', data.token);
+//   } catch (err) {
+//     throw err;
+//   } finally {
+//     setIsLoading(false);
+//   }
+// };
+
+// const logout = () => setUser(null);
+
+// return (
+//   <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+//     {children}
+//   </AuthContext.Provider>
+// );
+
+// export function useAuth() {
+//   const ctx = useContext(AuthContext);
+//   if (!ctx) throw new Error("useAuth must be inside AuthProvider");
+//   return ctx;
+// }
