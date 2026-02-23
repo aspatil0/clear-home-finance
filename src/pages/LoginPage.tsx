@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError("");
     try {
       await login(email, password);
-      const role = email.includes("admin") ? "admin" : email.includes("treasurer") ? "treasurer" : "resident";
+      const role = email.includes("superadmin") ? "superadmin" : email.includes("admin") ? "admin" : email.includes("treasurer") ? "treasurer" : "resident";
       navigate(`/${role}`);
     } catch {
       setError("Invalid email or password. Please try again.");
@@ -76,6 +76,7 @@ export default function LoginPage() {
             <p><span className="font-medium text-foreground">Admin:</span> admin@greenvalley.com</p>
             <p><span className="font-medium text-foreground">Treasurer:</span> treasurer@greenvalley.com</p>
             <p><span className="font-medium text-foreground">Resident:</span> resident@greenvalley.com</p>
+            <p><span className="font-medium text-foreground">SuperAdmin:</span> superadmin@societyhub.com</p>
             <p className="text-muted-foreground/60 mt-1">Any password works</p>
           </div>
         </div>

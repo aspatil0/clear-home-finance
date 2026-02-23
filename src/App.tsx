@@ -19,6 +19,10 @@ import ReceiptPage from "./pages/ReceiptPage";
 import ResidentInvoices from "./pages/ResidentInvoices";
 import ResidentPayments from "./pages/ResidentPayments";
 import TreasurerPayments from "./pages/TreasurerPayments";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import SuperAdminSocieties from "./pages/SuperAdminSocieties";
+import SuperAdminAllSocieties from "./pages/SuperAdminAllSocieties";
+import SuperAdminPaymentConfig from "./pages/SuperAdminPaymentConfig";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +56,12 @@ function AppRoutes() {
       <Route path="/treasurer" element={<TreasurerDashboard />} />
       <Route path="/treasurer/payments" element={<TreasurerPayments />} />
       <Route path="/treasurer/invoices" element={<InvoiceList />} />
+
+      {/* SuperAdmin */}
+      <Route path="/superadmin" element={<SuperAdminDashboard />} />
+      <Route path="/superadmin/societies" element={<SuperAdminSocieties />} />
+      <Route path="/superadmin/all-societies" element={<SuperAdminAllSocieties />} />
+      <Route path="/superadmin/payment-config" element={<SuperAdminPaymentConfig />} />
 
       {/* Resident */}
       <Route path="/resident" element={<ResidentDashboard />} />
