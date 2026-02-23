@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
-type UserRole = "admin" | "treasurer" | "resident";
+type UserRole = "admin" | "treasurer" | "resident" | "superadmin";
 
 interface AuthUser {
   id: string;
@@ -21,6 +21,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const mockUsers: Record<string, AuthUser> = {
+  "superadmin@societyhub.com": { id: "0", name: "System Admin", email: "superadmin@societyhub.com", role: "superadmin" },
   "admin@greenvalley.com": { id: "1", name: "Rajesh Kumar", email: "admin@greenvalley.com", role: "admin", societyName: "Green Valley Residency" },
   "treasurer@greenvalley.com": { id: "2", name: "Priya Sharma", email: "treasurer@greenvalley.com", role: "treasurer", societyName: "Green Valley Residency" },
   "resident@greenvalley.com": { id: "3", name: "Amit Patel", email: "resident@greenvalley.com", role: "resident", flatNumber: "A-301", societyName: "Green Valley Residency" },
