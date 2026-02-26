@@ -5,29 +5,132 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { Search, Download } from "lucide-react";
-import { useState } from "react";
-
-const allInvoices = [
-  { id: "INV-2026-001", flat: "A-101", owner: "Amit Patel", amount: "₹4,500", status: "paid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-002", flat: "A-102", owner: "Sunita Rao", amount: "₹4,500", status: "unpaid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-003", flat: "A-201", owner: "Vikram Singh", amount: "₹5,200", status: "overdue" as const, date: "Jan 01, 2026" },
-  { id: "INV-2026-004", flat: "A-202", owner: "Neha Gupta", amount: "₹4,500", status: "paid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-005", flat: "B-101", owner: "Ramesh Iyer", amount: "₹4,800", status: "unpaid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-006", flat: "A-301", owner: "Amit Patel", amount: "₹4,500", status: "unpaid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-007", flat: "B-201", owner: "Kiran Desai", amount: "₹5,200", status: "paid" as const, date: "Feb 01, 2026" },
-  { id: "INV-2026-008", flat: "B-102", owner: "Sanjay Kumar", amount: "₹4,800", status: "paid" as const, date: "Feb 01, 2026" },
-];
+import { useState, useEffect } from "react";
+import { getInvoices } from "@/api/invoices";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function InvoiceList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
+  const [invoices, setInvoices] = useState<any[]>([]);
+  useEffect(() => {
+    async function fetchInvoices() {
+      const societyId = user?.societyId || 1;
+      const data = await getInvoices(societyId);
+      const rows = Array.isArray(data) ? data : [];
+      const normalized = rows.map((inv: any) => {
+        const id = inv.invoiceNumber ?? (inv.id !== undefined ? String(inv.id) : "");
+        const flat = inv.flatNumber ?? (inv.flatId !== undefined ? String(inv.flatId) : "");
+        const owner = inv.ownerName ?? inv.owner ?? "";
+        const amountNum = Number(inv.amount || 0);
+        const amount = `₹${amountNum.toLocaleString()}`;
+        const status = (inv.status || "Unpaid").toString().toLowerCase();
+        const dateSrc = inv.dueDate || inv.createdAt || inv.date;
+        const date = dateSrc ? new Date(dateSrc).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : "";
+        return { id, flat, owner, amount, status, date, raw: inv };
+      });
+      setInvoices(normalized);
+    }
+    fetchInvoices();
+  }, [user?.societyId]);
 
-  const filtered = allInvoices.filter(
+  const filtered = invoices.filter(
     (inv) =>
-      inv.id.toLowerCase().includes(search.toLowerCase()) ||
-      inv.flat.toLowerCase().includes(search.toLowerCase()) ||
-      inv.owner.toLowerCase().includes(search.toLowerCase())
+      inv.id?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.flat?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.owner?.toLowerCase().includes(search.toLowerCase())
   );
+
+  async function downloadInvoiceAsPdf(inv: any) {
+    // Try to use a global jsPDF. If not present, load from CDN at runtime.
+    try {
+      let jsPDFCtor: any = (window as any).jsPDF;
+      if (!jsPDFCtor && (window as any).jspdf) {
+        jsPDFCtor = (window as any).jspdf.jsPDF || (window as any).jspdf.default;
+      }
+      if (!jsPDFCtor) {
+        // Load UMD build from CDN
+        await new Promise<void>((resolve, reject) => {
+          if (document.querySelector('script[data-jspdf]')) return resolve();
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          s.async = true;
+          s.setAttribute('data-jspdf', 'true');
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Failed to load jspdf from CDN'));
+          document.head.appendChild(s);
+        });
+        jsPDFCtor = (window as any).jsPDF || (window as any).jspdf?.jsPDF || (window as any).jspdf?.default;
+      }
+      if (!jsPDFCtor) throw new Error('jsPDF not available');
+      const doc = new jsPDFCtor();
+      const lines: string[] = [];
+      lines.push(`Invoice: ${inv.id}`);
+      lines.push(`Flat: ${inv.flat}`);
+      lines.push(`Owner: ${inv.owner}`);
+      lines.push(`Amount: ${inv.amount}`);
+      lines.push(`Status: ${inv.status}`);
+      lines.push(`Date: ${inv.date}`);
+      lines.push("");
+      // Add raw details if present
+      if (inv.raw) {
+        lines.push("Details:");
+        for (const [k, v] of Object.entries(inv.raw)) {
+          lines.push(`${k}: ${v}`);
+        }
+      }
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 14;
+      const maxLineWidth = pageWidth - margin * 2;
+      let cursorY = 20;
+      doc.setFontSize(12);
+      for (const line of lines) {
+        const split = (doc as any).splitTextToSize(line, maxLineWidth);
+        doc.text(split, margin, cursorY);
+        cursorY += (split.length + 0.5) * 7;
+        if (cursorY > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          cursorY = 20;
+        }
+      }
+
+      doc.save(`${inv.id || 'invoice'}.pdf`);
+    } catch (err) {
+      // Fallback to CSV if jsPDF is not available
+      console.warn('jsPDF not available, falling back to CSV', err);
+      // Build a simple CSV for the invoice
+      const rows = [
+        ["Invoice", inv.id],
+        ["Flat", inv.flat],
+        ["Owner", inv.owner],
+        ["Amount", inv.amount],
+        ["Status", inv.status],
+        ["Date", inv.date],
+      ];
+
+      const escape = (s: any) => {
+        if (s === null || s === undefined) return "";
+        const str = String(s);
+        if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+
+      const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${inv.id || 'invoice'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  }
 
   return (
     <AdminLayout>
@@ -69,7 +172,7 @@ export default function InvoiceList() {
                   <td className="px-5 py-3.5"><StatusBadge status={inv.status} /></td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground">{inv.date}</td>
                   <td className="px-5 py-3.5 text-right">
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" onClick={() => downloadInvoice(inv)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </td>

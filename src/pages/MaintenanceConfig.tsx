@@ -1,29 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/layouts/AdminLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Save, CheckCircle, Plus, Trash2 } from "lucide-react";
+import { Save, CheckCircle, Plus, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface ChargeItem {
-  id: string;
-  label: string;
-  amount: string;
-}
+import { useAuth } from "@/contexts/AuthContext";
+import { getMaintenanceConfig, updateMaintenanceConfig, ChargeItem } from "@/api/maintenance";
 
 export default function MaintenanceConfig() {
-  const [charges, setCharges] = useState<ChargeItem[]>([
-    { id: "1", label: "Base Maintenance", amount: "3000" },
-    { id: "2", label: "Sinking Fund", amount: "500" },
-    { id: "3", label: "Water Charges", amount: "400" },
-    { id: "4", label: "Parking", amount: "300" },
-    { id: "5", label: "Common Area Electricity", amount: "300" },
-  ]);
+  const { user } = useAuth();
+  const [charges, setCharges] = useState<ChargeItem[]>([]);
   const [dueDay, setDueDay] = useState("15");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    async function loadConfig() {
+      // 🛠️ Hardcoded to "1" for testing as requested
+      const targetSocietyId = user?.societyId || "1";
+
+      try {
+        console.log(`Loading maintenance config for societyId=${targetSocietyId}...`);
+        const data = await getMaintenanceConfig(targetSocietyId);
+        if (data) {
+          setCharges(data.charges || []);
+          setDueDay(String(data.dueDay || "15"));
+        }
+      } catch (err) {
+        console.error("Failed to load maintenance config", err);
+        toast({
+          title: "Error",
+          description: "Failed to load maintenance configuration.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadConfig();
+  }, [user?.societyId, toast]);
 
   const total = charges.reduce((sum, c) => sum + (parseInt(c.amount) || 0), 0);
 
@@ -37,11 +56,43 @@ export default function MaintenanceConfig() {
     setCharges(charges.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    toast({ title: "Configuration saved", description: "Maintenance charges updated successfully." });
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    console.log("handleSave called. User:", user);
+
+    // 🛠️ Hardcoded to "1" for testing as requested
+    const targetSocietyId = user?.societyId || "1";
+
+    setSaving(true);
+    console.log(`Saving maintenance config for societyId=${targetSocietyId}...`);
+    try {
+      await updateMaintenanceConfig(targetSocietyId, {
+        charges,
+        dueDay: parseInt(dueDay),
+      });
+      setSaved(true);
+      toast({ title: "Configuration saved", description: "Maintenance charges updated successfully." });
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to save config", err);
+      toast({
+        title: "Save Failed",
+        description: "Could not save maintenance configuration.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex h-[400px] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -97,9 +148,9 @@ export default function MaintenanceConfig() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave}>
-            {saved ? <CheckCircle className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
-            {saved ? "Saved!" : "Save Configuration"}
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (saved ? <CheckCircle className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />)}
+            {saving ? "Saving..." : (saved ? "Saved!" : "Save Configuration")}
           </Button>
         </div>
       </div>
