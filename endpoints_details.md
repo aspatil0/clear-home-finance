@@ -2,11 +2,39 @@
 
 Below is a list of all used API endpoints in the project, with their use and file path.
 
+
+
 ---
 
-## src/api/auth.ts
-- **POST https://dev.authentication.payplatter.in/auth/sign-in**
-  - Use: User login (function: login)
+## Backend Express Endpoints
+
+### Auth Endpoints
+- **POST /auth/login** — User login
+
+### Flats Endpoints
+- **POST /flats/** — Create a new flat
+- **GET /flats/society/:societyId** — Get all flats for a society
+- **DELETE /flats/:id** — Delete a flat by ID
+- **PUT /flats/:id** — Update a flat by ID
+
+### Invoices Endpoints
+- **GET /invoices/health** — Health check for invoices router
+- **GET /invoices/** — Get all invoices
+- **POST /invoices/generate** — Generate invoices
+- **GET /invoices/:invoiceNumber** — Get invoice by invoice number
+- **PUT /invoices/:invoiceNumber/pay** — Mark invoice as paid
+
+### Maintenance Endpoints
+- **GET /maintenance/:societyId** — Get maintenance config for a society
+- **POST /maintenance/:societyId** — Update maintenance config for a society
+
+### Societies Endpoints
+- **GET /societies/:id** — Get society by ID
+- **PUT /societies/:id** — Update society by ID
+- **POST /societies/** — Create a new society
+
+### Users Endpoints
+- *(No endpoints defined yet)*
 - **POST https://dev.authentication.payplatter.in/auth/verify_token**
   - Use: Verify access token (function: verifyToken)
 

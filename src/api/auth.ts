@@ -69,48 +69,26 @@
 // }
 
 
+
 import axios from "axios";
 
-const API_URL = "https://dev.authentication.payplatter.in/auth";
+// Use local backend for authentication during development
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+export const LOGIN_URL = `${API_URL}/auth/login`;
 
-// CONFIRMED endpoints
-export const LOGIN_URL = `${API_URL}/sign-in`;
-export const VERIFY_TOKEN_URL = `${API_URL}/verify_token`;
-
-// ⚠️ REQUIRED by backend
-const APPLICATION_ID = "SOCIETY_HUB"; // confirm value if different
-
-// ---- LOGIN ----
+// Local login function
 export async function login(username: string, password: string) {
   const response = await axios.post(
     LOGIN_URL,
     {
-      username, // email goes here
+      email: username, // local backend expects 'email'
       password,
     },
     {
       headers: {
         "Content-Type": "application/json",
-        "application-id": APPLICATION_ID,
       },
     }
   );
-
-  return response.data.results.data;
-}
-
-// ---- VERIFY TOKEN (for later use) ----
-export async function verifyToken(accessToken: string) {
-  const response = await axios.post(
-    VERIFY_TOKEN_URL,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "application-id": APPLICATION_ID,
-      },
-    }
-  );
-
   return response.data;
 }

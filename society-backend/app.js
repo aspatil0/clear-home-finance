@@ -5,12 +5,22 @@ const sequelize = require('./config/db');
 const flatRoutes = require('./routes/flats');
 const authRoutes = require('./routes/auth');
 const societyRoutes = require('./routes/societies');
+
 const maintenanceRoutes = require('./routes/maintenance');
+
+const userRoutes = require('./routes/users');
+
+const finalInvoiceRoutes = require('./routes/finalinvoices');
 const invoiceRoutes = require('./routes/invoices');
+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Users route (must be after app is initialized)
+app.use('/users', userRoutes);
+// FinalInvoices route
+app.use('/finalinvoices', finalInvoiceRoutes);
 
 // Flat routes
 app.use('/flats', flatRoutes);

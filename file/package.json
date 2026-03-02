@@ -1,0 +1,34 @@
+{
+  "name": "payplatter-filemanagement-microservice",
+  "version": "1.0.0",
+  "description": "Microservice about file uploading and parsing usable for different purposes.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dexpert-systems/payplatter-fileManagement-microservice.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dexpert-systems/payplatter-fileManagement-microservice/issues"
+  },
+  "homepage": "https://github.com/dexpert-systems/payplatter-fileManagement-microservice#readme",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.15.3",
+    "sequelize": "^6.37.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

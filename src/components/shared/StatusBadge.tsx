@@ -11,8 +11,9 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
   sent: { label: "Sent", className: "bg-primary/10 text-primary" },
 };
 
-export function StatusBadge({ status }: { status: Status }) {
-  const config = statusConfig[status];
+export function StatusBadge({ status }: { status: string }) {
+  const safeStatus = (status || "unpaid").toLowerCase() as Status;
+  const config = statusConfig[safeStatus as Status] || { label: safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1), className: "bg-muted text-muted-foreground" };
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium", config.className)}>
       {config.label}

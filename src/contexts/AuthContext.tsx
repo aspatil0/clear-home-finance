@@ -347,65 +347,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Try local auth first (resident users created from Society Setup)
-      let loggedUser: AuthUser | null = null;
-      try {
-        const localRes = await axios.post(`${LOCAL_API}/auth/login`, { email, password });
-        // local API returns { token, user }
-        const { token, user: localUser } = localRes.data;
-        loggedUser = {
-          id: String(localUser.id),
-          email: localUser.email,
-          role: localUser.role as AuthUser['role'],
-          name: localUser.name || undefined,
-          societyId: localUser.societyId ? String(localUser.societyId) : undefined,
-        };
-
-        setUser(loggedUser);
-        // store full local user + token so restore can pick it up
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user: localUser }));
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      } catch (localErr) {
-        // fallback to external auth provider
-        const res = await axios.post(
-          `${API_URL}/sign-in`,
-          { username: email, password },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              "application-id": APPLICATION_ID,
-            },
-          }
-        );
-
-        const authData = res.data.results.data;
-
-        loggedUser = {
-          id: authData.user.external_id,
-          email: authData.user.user_email,
-          role: mapRole(authData.user.type),
-          name: authData.user.display_name,
-        };
-
-        setUser(loggedUser);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(authData));
-
-        axios.defaults.headers.common["Authorization"] = `${authData.token_type.value} ${authData.access_token}`;
-
-        // 🧠 Bridge: Try to fetch local metadata (societyId) for this email
-        try {
-          const metaRes = await axios.get(`${LOCAL_API}/user-metadata/${email}`);
-          if (metaRes.data.societyId) {
-            const updated = { ...loggedUser, societyId: String(metaRes.data.societyId) };
-            setUser(updated);
-            // Update storage too
-            authData.user.local_society_id = metaRes.data.societyId;
-            localStorage.setItem(AUTH_KEY, JSON.stringify(authData));
-          }
-        } catch (metaErr) {
-          console.warn("Could not fetch local metadata for externally logged in user");
-        }
-      }
+      // Only use local backend for login
+      const localRes = await axios.post(`${LOCAL_API}/auth/login`, { email, password });
+      // local API returns { token, user }
+      const { token, user: localUser } = localRes.data;
+      const loggedUser: AuthUser = {
+        id: String(localUser.id),
+        email: localUser.email,
+        role: localUser.role as AuthUser['role'],
+        name: localUser.name || undefined,
+        societyId: localUser.societyId ? String(localUser.societyId) : undefined,
+      };
+      setUser(loggedUser);
+      // store full local user + token so restore can pick it up
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user: localUser }));
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } catch (err) {
+      // If local login fails, just throw error (do not fallback to Payplatter)
+      console.error("LOCAL LOGIN FAILED", err);
+      throw err;
     } finally {
       setIsLoading(false);
     }

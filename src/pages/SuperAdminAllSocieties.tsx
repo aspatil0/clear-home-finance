@@ -1,44 +1,36 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { SuperAdminLayout } from "@/components/layouts/SuperAdminLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getAllSocieties, Society } from "@/api/societies";
 
-interface Society {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  active: boolean;
-}
 
-const initialSocieties: Society[] = [
-  { id: "1", name: "Green Valley Residency", email: "admin@greenvalley.com", phone: "9876543210", active: true },
-  { id: "2", name: "Sunrise Apartments", email: "admin@sunrise.com", phone: "9876543211", active: true },
-  { id: "3", name: "Lake View Heights", email: "admin@lakeview.com", phone: "9876543212", active: false },
-  { id: "4", name: "Palm Grove Society", email: "admin@palmgrove.com", phone: "9876543213", active: true },
-  { id: "5", name: "Silver Oaks Residency", email: "admin@silveroaks.com", phone: "9876543214", active: false },
-];
 
 export default function SuperAdminAllSocieties() {
-  const [societies, setSocieties] = useState<Society[]>(initialSocieties);
+  const [societies, setSocieties] = useState<Society[]>([]);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
-  const toggleActive = (id: string) => {
-    setSocieties((prev) =>
-      prev.map((s) => {
-        if (s.id !== id) return s;
-        const updated = { ...s, active: !s.active };
-        toast({
-          title: updated.active ? "Society Activated" : "Society Deactivated",
-          description: `${s.name} has been ${updated.active ? "activated" : "deactivated"}.`,
-        });
-        return updated;
-      })
-    );
+  useEffect(() => {
+    fetchSocieties();
+  }, []);
+
+  const fetchSocieties = async () => {
+    try {
+      const data = await getAllSocieties();
+      setSocieties(data);
+    } catch (err) {
+      // Optionally show error
+    }
+  };
+
+  // Placeholder for toggleActive if you want to implement status toggling in the future
+  const toggleActive = (id: number) => {
+    // Implement status toggle logic here if needed
   };
 
   const filtered = societies.filter(
@@ -80,20 +72,12 @@ export default function SuperAdminAllSocieties() {
                 <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-5 py-3.5 text-sm font-medium">{s.name}</td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground">{s.email}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground">{s.phone}</td>
+                  <td className="px-5 py-3.5 text-sm text-muted-foreground">{s.address}</td>
                   <td className="px-5 py-3.5">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        s.active
-                          ? "bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))]"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {s.active ? "Active" : "Inactive"}
-                    </span>
+                    {/* Status/Active logic can be added here if you have such a field in DB */}
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <Switch checked={s.active} onCheckedChange={() => toggleActive(s.id)} />
+                    {/* Actions can be added here */}
                   </td>
                 </tr>
               ))}

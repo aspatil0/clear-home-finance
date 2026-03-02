@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSociety } from "@/api/societies";
 import { getFlats } from "@/api/flats";
-import { getInvoices } from "@/api/invoices";
+import { getFinalInvoices } from "@/api/finalinvoices";
 import { getMaintenanceConfig } from "@/api/maintenance";
 
 export default function ResidentDashboard() {
@@ -18,6 +18,21 @@ export default function ResidentDashboard() {
   const [flat, setFlat] = useState<any | null>(null);
   const [currentInvoice, setCurrentInvoice] = useState<any | null>(null);
   const [charges, setCharges] = useState<Array<{ label: string; amount: string }>>([]);
+  const [allInvoices, setAllInvoices] = useState<any[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<Array<{ name: string; price: number; quantity: number }>>([]);
+  // Keep invoiceItems in sync with currentInvoice
+  useEffect(() => {
+    if (currentInvoice && Array.isArray(currentInvoice.items)) {
+      // Normalize items to always have qty, name, price
+      setInvoiceItems(currentInvoice.items.map((item: any) => ({
+        name: item.name,
+        price: item.price,
+        qty: typeof item.qty === 'number' ? item.qty : (typeof item.quantity === 'number' ? item.quantity : 1)
+      })));
+    } else {
+      setInvoiceItems([]);
+    }
+  }, [currentInvoice]);
 
   const fmt = (value: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
@@ -53,7 +68,11 @@ export default function ResidentDashboard() {
       .catch(() => {});
   }, [user?.societyId]);
 
-  const maintenanceTotal = charges && charges.length ? charges.reduce((s, c) => s + Number(c.amount || 0), 0) : 0;
+  const maintenanceTotal = invoiceItems && invoiceItems.length
+    ? invoiceItems.reduce((s, item) => s + (item.price * item.qty), 0)
+    : charges && charges.length
+      ? charges.reduce((s, c) => s + Number(c.amount || 0), 0)
+      : 0;
 
   async function downloadInvoice(invRaw: any) {
     if (!invRaw) return;
@@ -98,7 +117,16 @@ export default function ResidentDashboard() {
       if (inv.raw) {
         lines.push("Details:");
         for (const [k, v] of Object.entries(inv.raw)) {
-          lines.push(`${k}: ${v}`);
+          if (k === "items" && Array.isArray(v)) {
+            lines.push("Items:");
+            v.forEach((item: any, idx: number) => {
+              const qty = typeof item.quantity === "number" && !isNaN(item.quantity) ? item.quantity : 1;
+              const price = typeof item.price === "number" && !isNaN(item.price) ? item.price : 0;
+              lines.push(`  - ${item.name} x${qty}: ₹${price * qty}`);
+            });
+          } else {
+            lines.push(`${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+          }
         }
       }
 
@@ -121,7 +149,6 @@ export default function ResidentDashboard() {
     } catch (err) {
       console.warn('jsPDF not available, falling back to CSV', err);
       const rows = [
-        ["Invoice", inv.id],
         ["Flat", inv.flat],
         ["Owner", inv.owner],
         ["Amount", inv.amount],
@@ -158,7 +185,11 @@ export default function ResidentDashboard() {
       const invoiceNumber = currentInvoice.invoiceNumber || currentInvoice.id;
       if (!invoiceNumber) return;
       const res = await (await import("@/api/invoices")).markInvoicePaid(invoiceNumber);
-      // update UI
+        const maintenanceTotal = invoiceItems && invoiceItems.length
+          ? invoiceItems.reduce((s, item) => s + (item.price * item.quantity), 0)
+          : charges && charges.length
+            ? charges.reduce((s, c) => s + Number(c.amount || 0), 0)
+            : 0;
       setCurrentInvoice((prev: any) => ({ ...(prev || {}), status: "Paid", paidDate: new Date().toISOString().split('T')[0] }));
       // Optionally show toast (if useToast available)
       // TODO: integrate with toasts
@@ -192,26 +223,19 @@ export default function ResidentDashboard() {
       .catch(() => {});
   }, [user?.societyId]);
 
-  // fetch invoices and find current unpaid for this flat
+  // fetch invoices for this resident from finalinvoices
   useEffect(() => {
-    if (!user?.societyId || !flat) return;
-    const sid = Number(user.societyId);
-    getInvoices(sid)
+    if (!user?.id) return;
+    getFinalInvoices({ residentId: user.id })
       .then((res) => {
         if (!res || !Array.isArray(res)) return;
-        const candidates = res.filter((inv: any) => {
-          // match by flatId or ownerName or email
-          if (flat.id && inv.flatId && Number(inv.flatId) === Number(flat.id)) return true;
-          if (inv.ownerName && flat.ownerName && inv.ownerName.toLowerCase() === flat.ownerName.toLowerCase()) return true;
-          return false;
-        });
-        // find latest unpaid (status may be 'Unpaid' or 'unpaid')
-        const unpaid = candidates.filter((c: any) => (c.status || "").toString().toLowerCase() === "unpaid");
-        const pick = unpaid.length ? unpaid.sort((a: any, b: any) => new Date(b.dueDate || b.createdAt).getTime() - new Date(a.dueDate || a.createdAt).getTime())[0] : candidates.sort((a: any, b: any) => new Date(b.dueDate || b.createdAt).getTime() - new Date(a.dueDate || a.createdAt).getTime())[0];
-        if (pick) setCurrentInvoice(pick);
+        setAllInvoices(res);
+        // Always show the most recently created invoice (by createdAt) as current
+        const sorted = res.slice().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (sorted.length) setCurrentInvoice(sorted[0]);
       })
       .catch(() => {});
-  }, [user?.societyId, flat]);
+  }, [user?.id]);
 
   const displayName = (flat && (flat.ownerName || flat.owner)) || user?.name || user?.email || "Resident";
 
@@ -255,7 +279,18 @@ export default function ResidentDashboard() {
       <div className="bg-card rounded-lg border p-6 mb-6 animate-fade-in">
         <h3 className="font-medium mb-4">Bill Breakdown</h3>
         <div className="space-y-3">
-          {charges && charges.length ? (
+          {invoiceItems && invoiceItems.length ? (
+            invoiceItems.map((item, idx) => {
+              const qty = typeof item.qty === "number" && !isNaN(item.qty) ? item.qty : 1;
+              const price = typeof item.price === "number" && !isNaN(item.price) ? item.price : 0;
+              return (
+                <div key={item.name + idx} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{item.name} {qty > 1 ? `x${qty}` : ""}</span>
+                  <span className="financial-amount">{fmt(price * qty)}</span>
+                </div>
+              );
+            })
+          ) : charges && charges.length ? (
             charges.map((item) => (
               <div key={item.label} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{item.label}</span>
@@ -272,31 +307,29 @@ export default function ResidentDashboard() {
         </div>
       </div>
 
-      {/* Past Bills */}
-      <div className="bg-card rounded-lg border">
+      {/* My Invoices (all invoices for resident) */}
+      <div className="bg-card rounded-lg border mt-8">
         <div className="flex items-center justify-between p-5 border-b">
-          <h3 className="font-medium">Past Bills</h3>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/resident/invoices")}>
-            View All <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
+          <h3 className="font-medium">My Invoices</h3>
         </div>
         <div className="divide-y">
-          {[
-            { month: "January 2026", amount: "₹4,500", status: "paid" as const, date: "Jan 10, 2026" },
-            { month: "December 2025", amount: "₹4,500", status: "paid" as const, date: "Dec 12, 2025" },
-            { month: "November 2025", amount: "₹4,200", status: "paid" as const, date: "Nov 08, 2025" },
-          ].map((bill) => (
-            <div key={bill.month} className="flex items-center justify-between px-5 py-3.5">
+          {allInvoices.length ? allInvoices.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between px-5 py-3.5">
               <div>
-                <p className="text-sm font-medium">{bill.month}</p>
-                <p className="text-xs text-muted-foreground">Paid on {bill.date}</p>
+                <p className="text-sm font-medium">Invoice #{inv.id}</p>
+                <p className="text-xs text-muted-foreground">Due: {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "-"}</p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm financial-amount">{bill.amount}</span>
-                <StatusBadge status={bill.status} />
+                <span className="text-sm financial-amount">₹{Number(inv.totalAmount).toLocaleString()}</span>
+                <StatusBadge status={inv.status || "unpaid"} />
+                <Button size="sm" variant="outline" onClick={() => downloadInvoice(inv)}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> PDF
+                </Button>
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="text-sm text-muted-foreground px-5 py-3.5">No invoices found</div>
+          )}
         </div>
       </div>
     </ResidentLayout>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createSociety, getAllSocieties, Society } from "@/api/societies";
 import { SuperAdminLayout } from "@/components/layouts/SuperAdminLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,26 @@ interface SocietyForm {
   address: string;
 }
 
+
 const emptyForm: SocietyForm = { name: "", email: "", phone: "", address: "" };
 
 export default function SuperAdminSocieties() {
+  const [societies, setSocieties] = useState<Society[]>([]);
+
+  // Fetch all societies on mount and after creation
+  useEffect(() => {
+    fetchSocieties();
+    // eslint-disable-next-line
+  }, []);
+
+  const fetchSocieties = async () => {
+    try {
+      const data = await getAllSocieties();
+      setSocieties(data);
+    } catch (err) {
+      // Optionally show error
+    }
+  };
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<SocietyForm>(emptyForm);
   const [errors, setErrors] = useState<Partial<SocietyForm>>({});
@@ -48,16 +66,26 @@ export default function SuperAdminSocieties() {
   const handleSubmit = async () => {
     if (!validate()) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setSaving(false);
-    setSaved(true);
-    toast({ title: "Society created", description: `${form.name} has been added successfully.` });
-    setTimeout(() => {
-      setSaved(false);
-      setForm(emptyForm);
-      setErrors({});
-      setOpen(false);
-    }, 1500);
+    try {
+      await createSociety({
+        name: form.name,
+        email: form.email,
+        address: form.address,
+      });
+      setSaving(false);
+      setSaved(true);
+      toast({ title: "Society created", description: `${form.name} has been added successfully.` });
+      fetchSocieties();
+      setTimeout(() => {
+        setSaved(false);
+        setForm(emptyForm);
+        setErrors({});
+        setOpen(false);
+      }, 1500);
+    } catch (err) {
+      setSaving(false);
+      toast({ title: "Error", description: "Failed to create society." });
+    }
   };
 
   const updateField = (field: keyof SocietyForm, value: string) => {
@@ -75,10 +103,31 @@ export default function SuperAdminSocieties() {
         </Button>
       </div>
 
-      <div className="bg-card rounded-lg border p-8 text-center animate-fade-in">
-        <p className="text-muted-foreground text-sm">
-          Click "Add New Society" to register a new housing society.
-        </p>
+
+      <div className="bg-card rounded-lg border p-8 animate-fade-in">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="text-left px-4 py-2">Society Name</th>
+              <th className="text-left px-4 py-2">Email</th>
+              <th className="text-left px-4 py-2">Address</th>
+              <th className="text-left px-4 py-2">Created At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {societies.map((soc) => (
+              <tr key={soc.id} className="border-b">
+                <td className="px-4 py-2">{soc.name}</td>
+                <td className="px-4 py-2">{soc.email}</td>
+                <td className="px-4 py-2">{soc.address}</td>
+                <td className="px-4 py-2">{new Date(soc.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+            {societies.length === 0 && (
+              <tr><td colSpan={4} className="text-center text-muted-foreground py-4">No societies found.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
