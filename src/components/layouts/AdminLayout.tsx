@@ -23,6 +23,7 @@ const adminNav: NavItem[] = [
   { label: "Society Setup", to: "/admin/setup", icon: <Building2 className="h-4 w-4" /> },
   { label: "Maintenance Config", to: "/admin/maintenance", icon: <Settings className="h-4 w-4" /> },
   { label: "Generate Bills", to: "/admin/generate-bills", icon: <Receipt className="h-4 w-4" /> },
+  { label: "Auto Invoice", to: "/admin/auto-invoice", icon: <CreditCard className="h-4 w-4" /> },
   { label: "Invoices", to: "/admin/invoices", icon: <FileText className="h-4 w-4" /> },
 ];
 

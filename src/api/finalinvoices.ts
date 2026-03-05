@@ -9,6 +9,11 @@ export async function createFinalInvoice(payload) {
   return res.data;
 }
 
+export async function createFinalInvoicesBulk(payload) {
+  const res = await API.post('/finalinvoices/bulk', payload);
+  return res.data;
+}
+
 export async function getFinalInvoices(params) {
   const res = await API.get("/finalinvoices", { params });
   return res.data;

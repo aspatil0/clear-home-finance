@@ -13,6 +13,8 @@ import { getFlats } from "@/api/flats";
 import { generateInvoices } from "@/api/invoices";
 import { createFinalInvoice } from "@/api/finalinvoices";
 import { getSociety } from "@/api/societies";
+import { createAutoInvoiceConfig } from "@/api/autoinvoices";
+import { getMaintenanceConfig } from "@/api/maintenance";
 import { getResidentsBySociety } from "@/api/users";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -38,21 +40,26 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [flats, setFlats] = useState<any[]>([]);
-  const { user } = useAuth();
+  const { user         
+ } = useAuth();
   const [society, setSociety] = useState<any>(null);
   const [residents, setResidents] = useState<any[]>([]);
+  const [maintenanceCharges, setMaintenanceCharges] = useState<any[] | null>(null);
   const form = useForm({
     defaultValues: {
       applicationId: "Societyhub0123",
       tenantId: "",
       residentId: "",
-      issueDate: "",
+    issueDate: "",
+    recurrenceType: "monthly",
       dueDate: "",
       totalAmount: "",
       gracePeriodDays: "",
       description: "",
       createdBy: user?.email || "AdminUser",
       items: [{ name: "", price: "", qty: "" }],
+      sendToAll: false,
+        editItemsWhenBulk: false,
     },
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
@@ -71,22 +78,60 @@ export default function AdminDashboard() {
       } catch (err) {
         setResidents([]); // If 404 or error, just show empty
       }
+      // fetch maintenance config to compute default items/total for bulk invoices
+      try {
+        const m = await getMaintenanceConfig(String(user.societyId));
+        let charges: any = m?.data?.config?.charges ?? m?.charges ?? m;
+        if (typeof charges === 'string') {
+          try { charges = JSON.parse(charges); } catch(e) { charges = null; }
+        }
+        if (Array.isArray(charges)) setMaintenanceCharges(charges);
+      } catch (e) {
+        setMaintenanceCharges(null);
+      }
     }
     if (open) fetchSocietyAndResidents();
   }, [open, user?.societyId]);
 
   async function onSubmit(values: any) {
-    // Prepare invoice object for FinalInvoice table
-    const invoice = {
-      ...values,
-      totalAmount: Number(values.totalAmount),
-      gracePeriodDays: Number(values.gracePeriodDays),
-      items: values.items.map((item: any) => ({ ...item, price: Number(item.price), qty: Number(item.qty) })),
-      tenantName: society?.name || "",
-      status: "unpaid",
-      societyId: user?.societyId ? Number(user.societyId) : null,
-    };
-    await createFinalInvoice(invoice);
+    if (values.sendToAll) {
+      // create AutoInvoice config (recurring) for the society
+      // prefer admin-supplied items when editing is enabled, otherwise use maintenance config if available
+      let items: Array<any> = [];
+      if (values.editItemsWhenBulk && values.items && Array.isArray(values.items) && values.items.length) {
+        items = (values.items || []).map((it: any) => ({ name: it.name, price: Number(it.price || 0), qty: Number(it.qty || 1) }));
+      } else if (maintenanceCharges && Array.isArray(maintenanceCharges) && maintenanceCharges.length) {
+        items = maintenanceCharges.map((c: any) => ({ name: c.label || c.name || '', price: Number(c.amount || c.price || 0), qty: Number(c.qty || c.quantity || 1) }));
+      } else {
+        items = (values.items || []).map((it: any) => ({ name: it.name, price: Number(it.price || 0), qty: Number(it.qty || 1) }));
+      }
+
+      const total = items.reduce((s: number, it: any) => s + (Number(it.price || 0) * Number(it.qty || 1)), 0);
+
+      const payload = {
+        societyId: Number(user.societyId),
+        applicationId: values.applicationId || undefined,
+        issueDate: values.issueDate,
+        recurrenceType: values.recurrenceType || 'monthly',
+        totalAmount: total,
+        items,
+        createdBy: values.createdBy || user?.email || 'admin',
+        runNow: true,
+      };
+      await createAutoInvoiceConfig(payload);
+    } else {
+      // Prepare invoice object for FinalInvoice table
+      const invoice = {
+        ...values,
+        totalAmount: Number(values.totalAmount),
+        gracePeriodDays: Number(values.gracePeriodDays),
+        items: values.items.map((item: any) => ({ ...item, price: Number(item.price), qty: Number(item.qty) })),
+        tenantName: society?.name || "",
+        status: "unpaid",
+        societyId: user?.societyId ? Number(user.societyId) : null,
+      };
+      await createFinalInvoice(invoice);
+    }
     setOpen(false);
     form.reset();
     // Optionally: refresh invoice list here
@@ -123,21 +168,23 @@ export default function AdminDashboard() {
                         <div className="text-xs text-muted-foreground mt-1">Tenant ID: {society?.tenantId}</div>
                       </FormItem>
                     )} />
-                    <FormField name="residentId" control={form.control} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Resident</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger><SelectValue placeholder="Select resident" /></SelectTrigger>
-                          <SelectContent>
-                            {residents.map(r => (
-                              <SelectItem key={r.id} value={r.id}>
-                                {(r.name || r.email || r.flatNumber || 'Resident')} (ID: {r.id})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )} />
+                    {!form.watch('sendToAll') && (
+                      <FormField name="residentId" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Resident</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger><SelectValue placeholder="Select resident" /></SelectTrigger>
+                            <SelectContent>
+                              {residents.map(r => (
+                                <SelectItem key={r.id} value={r.id}>
+                                  {(r.name || r.email || r.flatNumber || 'Resident')} (ID: {r.id})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )} />
+                    )}
                     <FormField name="issueDate" control={form.control} render={({ field }) => (
                       <FormItem>
                         <FormLabel>Issue Date</FormLabel>
@@ -146,38 +193,69 @@ export default function AdminDashboard() {
                         </FormControl>
                       </FormItem>
                     )} />
-                    <FormField name="dueDate" control={form.control} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Due Date</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="date" />
-                        </FormControl>
-                      </FormItem>
-                    )} />
-                    <FormField name="totalAmount" control={form.control} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Total Amount</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" placeholder="Total amount" />
-                        </FormControl>
-                      </FormItem>
-                    )} />
-                    <FormField name="gracePeriodDays" control={form.control} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Grace Period Days</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" placeholder="Grace period days" />
-                        </FormControl>
-                      </FormItem>
-                    )} />
-                    <FormField name="description" control={form.control} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Description" />
-                        </FormControl>
-                      </FormItem>
-                    )} />
+
+                    {/* show recurrence only for sendToAll (bulk recurring invoices) */}
+                    {form.watch('sendToAll') && (
+                      <FormField name="recurrenceType" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Recurrence</FormLabel>
+                          <FormControl>
+                            <Select {...field} onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select recurrence" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    )}
+                    {!form.watch('sendToAll') && (
+                      <FormField name="dueDate" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Due Date</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="date" />
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    )}
+                    {!form.watch('sendToAll') ? (
+                      <FormField name="totalAmount" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Total Amount</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" placeholder="Total amount" />
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Default invoice amount for this society: ₹{maintenanceCharges ? maintenanceCharges.reduce((s, c) => s + Number(c.amount || c.price || 0), 0) : '—'}</div>
+                    )}
+                    {!form.watch('sendToAll') && (
+                      <FormField name="gracePeriodDays" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Grace Period Days</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" placeholder="Grace period days" />
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    )}
+                    {!form.watch('sendToAll') && (
+                      <FormField name="description" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Description" />
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                    )}
                     <FormField name="createdBy" control={form.control} render={({ field }) => (
                       <FormItem>
                         <FormLabel>Created By</FormLabel>
@@ -186,12 +264,32 @@ export default function AdminDashboard() {
                         </FormControl>
                       </FormItem>
                     )} />
+                    <FormField name="sendToAll" control={form.control} render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" checked={field.value} onChange={(e) => field.onChange(e.target.checked)} />
+                          <div className="text-sm">Send invoice to all residents in this society</div>
+                        </div>
+                      </FormItem>
+                    )} />
+                    {form.watch('sendToAll') && (
+                      <FormField name="editItemsWhenBulk" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-center gap-2">
+                            <input type="checkbox" checked={field.value} onChange={(e) => field.onChange(e.target.checked)} />
+                            <div className="text-sm">Edit items for this bulk invoice</div>
+                          </div>
+                        </FormItem>
+                      )} />
+                    )}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium">Items</span>
-                        <Button type="button" size="sm" onClick={() => append({ name: "", price: "", qty: "" })}>Add Item</Button>
+                        {(!form.watch('sendToAll') || form.watch('editItemsWhenBulk')) && (
+                          <Button type="button" size="sm" onClick={() => append({ name: "", price: "", qty: "" })}>Add Item</Button>
+                        )}
                       </div>
-                      {fields.map((item, idx) => (
+                      {(!form.watch('sendToAll') || form.watch('editItemsWhenBulk')) && fields.map((item, idx) => (
                         <div key={item.id} className="flex gap-2 mb-2">
                           <FormField name={`items.${idx}.name`} control={form.control} render={({ field }) => (
                             <FormItem className="flex-1">

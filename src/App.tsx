@@ -106,6 +106,7 @@ import ResidentDashboard from "./pages/ResidentDashboard";
 import SocietySetup from "./pages/SocietySetup";
 import MaintenanceConfig from "./pages/MaintenanceConfig";
 import GenerateBills from "./pages/GenerateBills";
+import AutoInvoice from "./pages/AutoInvoice";
 import InvoiceList from "./pages/InvoiceList";
 import InvoiceDetail from "./pages/InvoiceDetail";
 import PaymentPage from "./pages/PaymentPage";
@@ -145,6 +146,7 @@ function AppRoutes() {
       <Route path="/admin/setup" element={<SocietySetup />} />
       <Route path="/admin/maintenance" element={<MaintenanceConfig />} />
       <Route path="/admin/generate-bills" element={<GenerateBills />} />
+      <Route path="/admin/auto-invoice" element={<AutoInvoice />} />
       <Route path="/admin/invoices" element={<InvoiceList />} />
       <Route path="/admin/invoices/:id" element={<InvoiceDetail />} />
 
