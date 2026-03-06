@@ -262,10 +262,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_KEY = "payplatter_auth";
-const API_URL = "https://dev.authentication.payplatter.in/auth";
+// Read auth service base URL from Vite env (VITE_AUTH_API_URL). Fall back to dev URL.
+const API_URL = import.meta.env.VITE_AUTH_API_URL || "https://dev.authentication.payplatter.in/auth";
 export const GET_USER_BY_ACCESSTOKEN_URL = `${API_URL}/verify_token`;
 export const LOGIN_URL = `${API_URL}/sign-in`;
-const APPLICATION_ID = "PRMS.Mp9N3bRcT6FgYqZ";  //sir porvide appliction id
+const APPLICATION_ID = "app-1772775988987";  //sir porvide appliction id
 
 // Local backend for resident logins
 const LOCAL_API = import.meta.env.VITE_LOCAL_API_URL || "http://localhost:5000";

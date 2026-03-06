@@ -28,6 +28,51 @@
 // };
 const Invoice = require("../models/Invoice");
 const { Op } = require('sequelize');
+const axios = require('axios');
+
+const AUTH_URL = process.env.AUTH_SERVICE_URL;
+const INVOICE_URL = process.env.INVOICE_SERVICE_URL;
+const PAYMENT_URL = process.env.PAYMENT_SERVICE_URL;
+const httpClient = axios.create({ timeout: 5000 });
+
+async function verifyUserFromHeader(req) {
+  if (!AUTH_URL) return null; // auth service not configured, skip
+  const token = req.headers.authorization || req.headers.Authorization;
+  if (!token) return null;
+  try {
+    const resp = await httpClient.get(`${AUTH_URL.replace(/\/$/, '')}/verify`, {
+      headers: { Authorization: token },
+    });
+    return resp.data;
+  } catch (err) {
+    console.warn('[invoiceController] auth verify failed:', err.message);
+    return null;
+  }
+}
+
+async function syncInvoiceToRemote(invoice) {
+  if (!INVOICE_URL) return;
+  try {
+    await httpClient.post(`${INVOICE_URL.replace(/\/$/, '')}/invoices`, invoice);
+  } catch (err) {
+    console.warn('[invoiceController] sync to remote invoice service failed:', err.message);
+  }
+}
+
+async function notifyPaymentWrapper(invoice) {
+  if (!PAYMENT_URL) return;
+  try {
+    // best-effort notify the payment wrapper; do not block on failure
+    await httpClient.post(`${PAYMENT_URL.replace(/\/$/, '')}/payments`, {
+      invoiceNumber: invoice.invoiceNumber,
+      amount: invoice.amount,
+      societyId: invoice.societyId,
+      paidDate: invoice.paidDate || new Date(),
+    });
+  } catch (err) {
+    console.warn('[invoiceController] notify payment wrapper failed:', err.message);
+  }
+}
 
 // Get invoices by society
 exports.getInvoices = async (req, res) => {
@@ -49,6 +94,12 @@ exports.getInvoices = async (req, res) => {
 // Generate invoices
 exports.generateInvoices = async (req, res) => {
   const { societyId, invoices } = req.body;
+
+  // If an auth service is configured, require a successful verification
+  if (AUTH_URL) {
+    const verified = await verifyUserFromHeader(req);
+    if (!verified) return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   if (!societyId || !Array.isArray(invoices) || invoices.length === 0) {
     return res.status(400).json({ error: "Invalid payload" });
@@ -87,6 +138,18 @@ exports.generateInvoices = async (req, res) => {
       }
 
       await t.commit();
+      // fire-and-forget: sync created/updated invoices to remote invoice service if configured
+      try {
+        if (INVOICE_URL) {
+          for (const inv of invoices) {
+            // include societyId to remote payload
+            syncInvoiceToRemote({ ...inv, societyId });
+          }
+        }
+      } catch (e) {
+        console.warn('[invoiceController] background sync scheduling failed:', e.message);
+      }
+
       res.json({ success: true });
     } catch (errInner) {
       await t.rollback();
@@ -127,6 +190,18 @@ exports.markPaid = async (req, res) => {
     inv.status = 'Paid';
     inv.paidDate = new Date();
     await inv.save();
+
+    // Notify payment wrapper (best-effort, non-blocking)
+    try {
+      notifyPaymentWrapper({
+        invoiceNumber: inv.invoiceNumber,
+        amount: inv.amount,
+        societyId: inv.societyId,
+        paidDate: inv.paidDate,
+      });
+    } catch (e) {
+      console.warn('[invoiceController] scheduling payment notify failed:', e.message);
+    }
 
     res.json({ success: true, invoice: inv });
   } catch (err) {
